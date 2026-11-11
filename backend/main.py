@@ -32,7 +32,11 @@ app = FastAPI(title="SmartSchedule AI API")
 # Allow frontend connections
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=[
+        "http://localhost:5173",
+        "https://smart-schedule-ai-five.vercel.app",
+        "https://smart-schedule-ai-git-main-nexora-9257.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
