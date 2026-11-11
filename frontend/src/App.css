@@ -1088,3 +1088,327 @@ button {
 .timetable-form .submit-task:hover {
   background: #7045e5;
 }
+
+.timetable-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 20px;
+  border: 1px solid #26334d;
+  border-radius: 12px;
+}
+
+.timetable-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 750px;
+  text-align: left;
+}
+
+.timetable-table thead {
+  background: #17243b;
+}
+
+.timetable-table th {
+  padding: 16px;
+  color: #aebbd0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.timetable-table td {
+  padding: 16px;
+  color: #e2e8f0;
+  font-size: 14px;
+  border-top: 1px solid #26334d;
+}
+
+.timetable-table tbody tr {
+  background: #111c30;
+  transition: background 0.2s ease;
+}
+
+.timetable-table tbody tr:hover {
+  background: #1b2942;
+}
+
+.timetable-table td:first-child {
+  color: #a5b4fc;
+  white-space: nowrap;
+}
+
+.timetable-table td:nth-child(2) {
+  font-weight: 600;
+}
+
+.timetable-table .check-button {
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.timetable-table .delete-task {
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #f87171;
+  background: transparent;
+}
+
+.timetable-table .delete-task:hover {
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.empty-tasks {
+  text-align: center;
+  padding: 35px;
+  color: #94a3b8;
+}
+
+.timetable-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 20px;
+  border: 1px solid #26334d;
+  border-radius: 12px;
+}
+
+.timetable-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 750px;
+  text-align: left;
+}
+
+.timetable-table thead {
+  background: #17243b;
+}
+
+.timetable-table th {
+  padding: 16px;
+  color: #aebbd0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.timetable-table td {
+  padding: 16px;
+  color: #e2e8f0;
+  font-size: 14px;
+  border-top: 1px solid #26334d;
+}
+
+.timetable-table tbody tr {
+  background: #111c30;
+  transition: background 0.2s ease;
+}
+
+.timetable-table tbody tr:hover {
+  background: #1b2942;
+}
+
+.timetable-table td:first-child {
+  color: #a5b4fc;
+  white-space: nowrap;
+}
+
+.timetable-table td:nth-child(2) {
+  font-weight: 600;
+}
+
+.timetable-table .check-button {
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.timetable-table .delete-task {
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #f87171;
+  background: transparent;
+}
+
+.timetable-table .delete-task:hover {
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.empty-tasks {
+  text-align: center;
+  padding: 35px;
+  color: #94a3b8;
+}
+
+/* Calendar layout */
+.my-timetable-page {
+  display: block;
+}
+
+.calendar-container {
+  display: block;
+  width: 100%;
+  max-width: 650px;
+  margin: 0 auto 35px;
+  padding: 24px;
+  background: #111c30;
+  border: 1px solid #26334d;
+  border-radius: 14px;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.calendar-header h2 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.calendar-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #26334d;
+  border-radius: 8px;
+  background: #1b2942;
+  color: #fff;
+  cursor: pointer;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.calendar-day-name {
+  padding: 10px 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.calendar-date {
+  position: relative;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: #1b2942;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.calendar-date:hover {
+  border-color: #818cf8;
+}
+
+.calendar-date.selected {
+  background: #5145cd;
+  color: #fff;
+  border-color: #818cf8;
+}
+
+.calendar-dot {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #4ade80;
+  transform: translateX(-50%);
+}
+
+/* Timetable table */
+.timetable-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 20px;
+  border: 1px solid #26334d;
+  border-radius: 12px;
+}
+
+.timetable-table {
+  width: 100%;
+  min-width: 750px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.timetable-table thead {
+  background: #17243b;
+}
+
+.timetable-table th {
+  padding: 16px;
+  color: #aebbd0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.timetable-table td {
+  padding: 16px;
+  color: #e2e8f0;
+  font-size: 14px;
+  border-top: 1px solid #26334d;
+}
+
+.timetable-table tbody tr {
+  background: #111c30;
+}
+
+.timetable-table tbody tr:hover {
+  background: #1b2942;
+}
+
+.timetable-table td:first-child {
+  color: #a5b4fc;
+  white-space: nowrap;
+}
+
+.timetable-table .check-button {
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.timetable-table .delete-task {
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #f87171;
+  background: transparent;
+}
+
+.selected-date-heading {
+  margin-top: 25px;
+}
+
+@media (max-width: 600px) {
+  .calendar-container {
+    padding: 14px;
+  }
+
+  .calendar-grid {
+    gap: 5px;
+  }
+
+  .calendar-date {
+    min-height: 40px;
+  }
+}

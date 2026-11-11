@@ -1,3 +1,4 @@
+
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useState, useEffect } from "react";
@@ -24,42 +25,79 @@ import "./App.css";
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [showAddTask, setShowAddTask] = useState(false);
+  const [showTimetableForm, setShowTimetableForm] = useState(false);
 
   const [newTask, setNewTask] = useState({
     title: "",
     subject: "",
     start: "",
     end: "",
+    date: "",
     priority: "Medium"
   });
-  const [completed, setCompleted] = useState(() => {
-    return JSON.parse(
-      localStorage.getItem("smartScheduleCompleted") || "[]"
-    );
-  });
-  const [searchTerm, setSearchTerm] = useState("");
 
+  const [completed, setCompleted] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("smartScheduleCompleted") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const [searchTerm, setSearchTerm] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("All");
-  const [day, setDay] = useState("Monday");
+
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(() =>
+    formatDate(new Date())
+  );
+
+  const [currentMonth, setCurrentMonth] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  );
+
+  const [day, setDay] = useState(() =>
+    new Date().toLocaleDateString("en-US", { weekday: "long" })
+  );
+
   const [chatInput, setChatInput] = useState("");
-  const [showTimetableForm, setShowTimetableForm] = useState(false);
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   const [studentDetails, setStudentDetails] = useState({
     subjects: "",
     studyHours: "",
     preferredTime: "Flexible",
     duration: "7",
+    startDate: "",
+    endDate: "",
     examDetails: ""
   });
 
-  const [chatMessages, setChatMessages] = useState([
-    {
-      role: "assistant",
-      text: "Hi! I'm your SmartSchedule AI assistant. Tell me about your study goals and I'll help you plan your day."
+  const [chatMessages, setChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem("smartScheduleChat");
+      return saved ? JSON.parse(saved) : [{
+        role: "assistant",
+        text: "Hi! I'm your SmartSchedule AI assistant. Tell me about your tasks, goals or plans, and I'll help you organize your time."
+      }];
+    } catch {
+      return [{
+        role: "assistant",
+        text: "Hi! I'm your SmartSchedule AI assistant. Tell me about your tasks, goals or plans, and I'll help you organize your time."
+      }];
     }
-  ]);
+  });
 
-
+  const days = [
+    "Monday", "Tuesday", "Wednesday", "Thursday",
+    "Friday", "Saturday", "Sunday"
+  ];
 
   const defaultTasks = [
     { id: 1, title: "Java DSA Practice", subject: "Programming", time: "09:00 AM - 10:00 AM", day: "Monday", priority: "High" },
@@ -68,97 +106,191 @@ function App() {
     { id: 4, title: "Computer Networks", subject: "Computer Science", time: "04:00 PM - 05:00 PM", day: "Thursday", priority: "Medium" }
   ];
 
-
   const [tasks, setTasks] = useState(() => {
     try {
-      const savedTasks = localStorage.getItem("smartScheduleTasks");
-      return savedTasks ? JSON.parse(savedTasks) : defaultTasks;
+      const saved = localStorage.getItem("smartScheduleTasks");
+      return saved ? JSON.parse(saved) : defaultTasks;
     } catch {
       return defaultTasks;
     }
   });
 
-  // Save tasks whenever they change
   useEffect(() => {
-    localStorage.setItem(
-      "smartScheduleTasks",
-      JSON.stringify(tasks)
-    );
+    localStorage.setItem("smartScheduleTasks", JSON.stringify(tasks));
   }, [tasks]);
 
-  // Save completed tasks whenever they change
   useEffect(() => {
-    localStorage.setItem(
-      "smartScheduleCompleted",
-      JSON.stringify(completed)
-    );
+    localStorage.setItem("smartScheduleCompleted", JSON.stringify(completed));
   }, [completed]);
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  useEffect(() => {
+    localStorage.setItem("smartScheduleChat", JSON.stringify(chatMessages));
+  }, [chatMessages]);
+
+  // Migrate old tasks that do not have dates.
+  useEffect(() => {
+    const today = new Date(selectedDate + "T00:00:00");
+    const dayOfWeek = today.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+
+    setTasks((previousTasks) =>
+      previousTasks.map((task) => {
+        if (task.date) return task;
+
+        const dayIndex = days.indexOf(task.day);
+        if (dayIndex === -1) return task;
+
+        const taskDate = new Date(monday);
+        taskDate.setDate(monday.getDate() + dayIndex);
+
+        return { ...task, date: formatDate(taskDate) };
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const changeMonth = (amount) => {
+    setCurrentMonth((previous) =>
+      new Date(
+        previous.getFullYear(),
+        previous.getMonth() + amount,
+        1
+      )
+    );
+  };
+
+  const firstDayOfMonth = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth(),
+    1
+  );
+
+  const daysInMonth = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth() + 1,
+    0
+  ).getDate();
+
+  const startingDay = (firstDayOfMonth.getDay() + 6) % 7;
+
+  const calendarCells = [
+    ...Array(startingDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1)
+  ];
+
+  const selectedDateTasks = tasks
+    .filter((task) => task.date === selectedDate)
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  const filteredTasks = tasks
+    .filter((task) =>
+      task.title.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .filter((task) =>
+      priorityFilter === "All" ||
+      (task.priority || "Medium") === priorityFilter
+    );
 
   const toggleTask = (id) => {
-    setCompleted((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    setCompleted((previous) =>
+      previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [...previous, id]
     );
   };
+
   const deleteTask = (taskId) => {
-    setTasks((prev) =>
-      prev.filter((task) => task.id !== taskId)
+    setTasks((previous) =>
+      previous.filter((task) => task.id !== taskId)
     );
-
-    setCompleted((prev) =>
-      prev.filter((id) => id !== taskId)
+    setCompleted((previous) =>
+      previous.filter((id) => id !== taskId)
     );
   };
 
+  const selectDate = (dateString) => {
+    setSelectedDate(dateString);
+    setDay(
+      new Date(dateString + "T00:00:00").toLocaleDateString(
+        "en-US",
+        { weekday: "long" }
+      )
+    );
+  };
 
+  const goToToday = () => {
+    const today = new Date();
+    const todayString = formatDate(today);
+
+    selectDate(todayString);
+    setCurrentMonth(
+      new Date(today.getFullYear(), today.getMonth(), 1)
+    );
+  };
+
+  const clearChat = () => {
+    if (!window.confirm("Are you sure you want to clear your conversation?")) {
+      return;
+    }
+
+    setChatMessages([{
+      role: "assistant",
+      text: "Hi! I'm your SmartSchedule AI assistant. Tell me about your tasks, goals or plans, and I'll help you organize your time."
+    }]);
+  };
 
   const sendMessage = async (messageText = chatInput) => {
     if (!messageText.trim()) return;
 
     const userMessage = messageText.trim();
 
-    setChatMessages((prev) => [
-      ...prev,
+    setChatMessages((previous) => [
+      ...previous,
       { role: "user", text: userMessage }
     ]);
 
     setChatInput("");
+    setIsChatLoading(true);
 
     try {
       const response = await fetch("http://127.0.0.1:8000/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: userMessage
+          message: userMessage,
+          tasks,
+          completed,
+          history: chatMessages.slice(-10).map((message) => ({
+            role: message.role,
+            content: message.text
+          }))
         })
       });
 
-      if (!response.ok) {
-        throw new Error("Backend request failed");
-      }
+      if (!response.ok) throw new Error("Backend request failed");
 
       const data = await response.json();
 
-      setChatMessages((prev) => [
-        ...prev,
+      setChatMessages((previous) => [
+        ...previous,
         { role: "assistant", text: data.reply }
       ]);
-
     } catch (error) {
       console.error("Chat error:", error);
 
-      setChatMessages((prev) => [
-        ...prev,
+      setChatMessages((previous) => [
+        ...previous,
         {
           role: "assistant",
           text: "Unable to connect to the backend. Please check whether the server is running."
         }
       ]);
+    } finally {
+      setIsChatLoading(false);
     }
   };
-
 
   const addTask = () => {
     if (!newTask.title || !newTask.start || !newTask.end) {
@@ -166,7 +298,6 @@ function App() {
       return;
     }
 
-    // Convert time into minutes
     const startMinutes =
       Number(newTask.start.split(":")[0]) * 60 +
       Number(newTask.start.split(":")[1]);
@@ -175,77 +306,39 @@ function App() {
       Number(newTask.end.split(":")[0]) * 60 +
       Number(newTask.end.split(":")[1]);
 
-    // Check whether end time is after start time
     if (endMinutes <= startMinutes) {
       alert("End time must be after start time");
       return;
     }
 
-    // Check for overlapping tasks
+    const taskDate = newTask.date || selectedDate;
+
     const hasOverlap = tasks.some((task) => {
+      if (task.date !== taskDate) return false;
+
       const [oldStart, oldEnd] = task.time.split(" - ");
 
-      const oldStartMinutes =
-        Number(oldStart.split(":")[0]) * 60 +
-        Number(oldStart.split(":")[1]);
+      const oldStartParts = oldStart.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      const oldEndParts = oldEnd.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
 
-      const oldEndMinutes =
-        Number(oldEnd.split(":")[0]) * 60 +
-        Number(oldEnd.split(":")[1]);
+      if (!oldStartParts || !oldEndParts) return false;
+
+      const toMinutes = (parts) => {
+        let hour = Number(parts[1]);
+        const minute = Number(parts[2]);
+        const meridiem = parts[3]?.toUpperCase();
+
+        if (meridiem === "PM" && hour !== 12) hour += 12;
+        if (meridiem === "AM" && hour === 12) hour = 0;
+
+        return hour * 60 + minute;
+      };
 
       return (
-        startMinutes < oldEndMinutes &&
-        endMinutes > oldStartMinutes
+        startMinutes < toMinutes(oldEndParts) &&
+        endMinutes > toMinutes(oldStartParts)
       );
     });
-
-
-    // const sendMessage = async () => {
-    //   if (!chatInput.trim()) return;
-
-    //   const userMessage = chatInput.trim();
-
-    //   setChatMessages((prev) => [
-    //     ...prev,
-    //     { role: "user", text: userMessage }
-    //   ]);
-
-    //   setChatInput("");
-
-    //   try {
-    //     const response = await fetch("http://127.0.0.1:8000/chat", {
-    //       method: "POST",
-    //       headers: {
-    //         "Content-Type": "application/json"
-    //       },
-    //       body: JSON.stringify({
-    //         message: userMessage
-    //       })
-    //     });
-
-    //     if (!response.ok) {
-    //       throw new Error("Backend request failed");
-    //     }
-
-    //     const data = await response.json();
-
-    //     setChatMessages((prev) => [
-    //       ...prev,
-    //       { role: "assistant", text: data.reply }
-    //     ]);
-
-    //   } catch (error) {
-    //     setChatMessages((prev) => [
-    //       ...prev,
-    //       {
-    //         role: "assistant",
-    //         text: "Unable to connect to the backend. Please check whether the server is running."
-    //       }
-    //     ]);
-    //   }
-    // };
-
-
 
     if (hasOverlap) {
       alert("This time slot overlaps with another task!");
@@ -258,24 +351,119 @@ function App() {
       subject: newTask.subject || "General",
       time: `${newTask.start} - ${newTask.end}`,
       priority: newTask.priority,
-      day: day
+      date: taskDate,
+      day: new Date(taskDate + "T00:00:00").toLocaleDateString(
+        "en-US",
+        { weekday: "long" }
+      )
     };
 
-    setTasks((prev) => [...prev, task]);
+    setTasks((previous) => [...previous, task]);
 
     setNewTask({
       title: "",
       subject: "",
       start: "",
       end: "",
+      date: "",
       priority: "Medium"
     });
 
     setShowAddTask(false);
   };
 
+  const generateTimetable = async (event) => {
+    event.preventDefault();
 
-  const progress = Math.round((completed.length / tasks.length) * 100);
+    if (
+      !studentDetails.startDate ||
+      !studentDetails.endDate ||
+      studentDetails.endDate < studentDetails.startDate
+    ) {
+      alert("Please select a valid start date and end date.");
+      return;
+    }
+
+    const prompt = `Create a timetable ONLY between these dates:
+
+Start Date: ${studentDetails.startDate}
+End Date: ${studentDetails.endDate}
+
+Tasks, subjects or goals: ${studentDetails.subjects}.
+Available hours per day: ${studentDetails.studyHours || "Choose suitable hours"}.
+Preferred working time: ${studentDetails.preferredTime || "No preference"}.
+Important deadlines or events: ${studentDetails.examDetails || "None specified"}.
+
+IMPORTANT RULES:
+1. Generate tasks only between the specified start date and end date, including both dates.
+2. Do not generate tasks outside this date range.
+3. Include the actual calendar date (YYYY-MM-DD) for every task.
+4. Distribute tasks across the selected date range.
+5. Include start time, end time, title, subject and priority for every task.
+6. Return tasks in JSON format.`;
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/generate-timetable",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: prompt })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Schedule generation failed");
+      }
+
+      const data = await response.json();
+
+      const newTasks = (data.tasks || [])
+        .filter((task) => {
+          return (
+            task.title &&
+            task.start &&
+            task.end &&
+            task.date >= studentDetails.startDate &&
+            task.date <= studentDetails.endDate
+          );
+        })
+        .map((task, index) => ({
+          id: Date.now() + index,
+          title: task.title,
+          subject: task.subject || "General",
+          time: `${task.start} - ${task.end}`,
+          priority: task.priority || "Medium",
+          date: task.date,
+          day: new Date(task.date + "T00:00:00").toLocaleDateString(
+            "en-US",
+            { weekday: "long" }
+          )
+        }));
+
+      setTasks((previous) => [...previous, ...newTasks]);
+
+      selectDate(studentDetails.startDate);
+      setCurrentMonth(
+        new Date(studentDetails.startDate + "T00:00:00")
+      );
+
+      setShowTimetableForm(false);
+      setActivePage("My Timetable");
+
+      if (newTasks.length === 0) {
+        alert("The AI returned no valid tasks in the selected date range. Please try again.");
+      }
+    } catch (error) {
+      console.error("Schedule generation error:", error);
+      alert(error.message || "Unable to generate your schedule. Please try again.");
+    }
+  };
+
+  const progress = tasks.length
+    ? Math.round((completed.filter((id) => tasks.some((task) => task.id === id)).length / tasks.length) * 100)
+    : 0;
 
   return (
     <div className="app">
@@ -327,13 +515,19 @@ function App() {
             <span className="breadcrumb">Workspace / {activePage}</span>
             <h2>{activePage}</h2>
           </div>
-          <button className="date-button"><CalendarDays size={17} /> Today</button>
+
+          <button className="date-button" onClick={goToToday}>
+            <CalendarDays size={17} /> Today
+          </button>
         </header>
+
         {activePage === "Dashboard" && (
           <>
             <section className="welcome">
               <div>
-                <span className="welcome-tag"><Sparkles size={15} /> YOUR PERSONAL AI PLANNER</span>
+                <span className="welcome-tag">
+                  <Sparkles size={15} /> YOUR PERSONAL AI PLANNER
+                </span>
                 <h1>Make today <span>count.</span></h1>
                 <p>Organize your time, focus on your goals and make every hour productive.</p>
               </div>
@@ -343,19 +537,38 @@ function App() {
             <section className="stats">
               <div className="stat-card">
                 <div className="stat-icon purple"><Clock /></div>
-                <div><small>Study hours</small><h2>4.0 hrs</h2><span>Daily target</span></div>
+                <div>
+                  <small>Scheduled hours</small>
+                  <h2>My Schedule</h2>
+                  <span>Manage your daily activities</span>
+                </div>
               </div>
+
               <div className="stat-card">
                 <div className="stat-icon green"><CheckSquare /></div>
-                <div><small>Tasks completed</small><h2>{completed.length}/{tasks.length}</h2><span>Today's progress</span></div>
+                <div>
+                  <small>Tasks completed</small>
+                  <h2>{completed.filter((id) => tasks.some((task) => task.id === id)).length}/{tasks.length}</h2>
+                  <span>Overall progress</span>
+                </div>
               </div>
+
               <div className="stat-card">
                 <div className="stat-icon orange"><Flame /></div>
-                <div><small>Daily progress</small><h2>{progress}%</h2><span>Keep going!</span></div>
+                <div>
+                  <small>Daily progress</small>
+                  <h2>{progress}%</h2>
+                  <span>Keep going!</span>
+                </div>
               </div>
+
               <div className="stat-card">
                 <div className="stat-icon blue"><Target /></div>
-                <div><small>Weekly goal</small><h2>20 hrs</h2><span>Study target</span></div>
+                <div>
+                  <small>Total tasks</small>
+                  <h2>{tasks.length}</h2>
+                  <span>Across your schedule</span>
+                </div>
               </div>
             </section>
 
@@ -366,24 +579,31 @@ function App() {
                     <h3>Today's Schedule</h3>
                     <p>Your planned activities</p>
                   </div>
-                  <button className="add-button" onClick={() => setShowAddTask(true)}><Plus size={17} /> Add task</button>
+                  <button className="add-button" onClick={() => setShowAddTask(true)}>
+                    <Plus size={17} /> Add task
+                  </button>
                 </div>
 
                 <div className="day-selector">
-                  <button onClick={() => setDay(days[Math.max(0, days.indexOf(day) - 1)])}><ChevronLeft /></button>
+                  <button onClick={() => setDay(days[Math.max(0, days.indexOf(day) - 1)])}>
+                    <ChevronLeft />
+                  </button>
                   <strong>{day}</strong>
-                  <button onClick={() => setDay(days[Math.min(6, days.indexOf(day) + 1)])}><ChevronRight /></button>
+                  <button onClick={() => setDay(days[Math.min(6, days.indexOf(day) + 1)])}>
+                    <ChevronRight />
+                  </button>
                 </div>
 
                 <div className="task-list">
-                  {tasks.map((task) => {
-
+                  {tasks.filter((task) => task.day === day).map((task) => {
                     const Icon = task.subject?.toLowerCase().includes("programming")
                       ? Code
                       : task.subject?.toLowerCase().includes("computer science")
                         ? GraduationCap
                         : BookOpen;
+
                     const done = completed.includes(task.id);
+
                     return (
                       <div className={`task-row ${done ? "done" : ""}`} key={task.id}>
                         <div className="task-time">{task.time.split(" - ")[0]}</div>
@@ -394,17 +614,21 @@ function App() {
                             type="button"
                             className="delete-task"
                             onClick={() => deleteTask(task.id)}
-                            title="Delete task"
                           >
                             ×
                           </button>
-                          <span className={`priority-badge ${task.priority?.toLowerCase() || "medium"}`}>
+                          <span className={`priority-badge ${(task.priority || "Medium").toLowerCase()}`}>
                             {task.priority || "Medium"}
                           </span>
                           <small>{task.subject}</small>
-                          <small className="task-end"><Clock size={12} /> {task.time}</small>
+                          <small className="task-end">
+                            <Clock size={12} /> {task.time}
+                          </small>
                         </div>
-                        <button className={`check-button ${done ? "checked" : ""}`} onClick={() => toggleTask(task.id)}>
+                        <button
+                          className={`check-button ${done ? "checked" : ""}`}
+                          onClick={() => toggleTask(task.id)}
+                        >
                           {done ? "✓" : ""}
                         </button>
                       </div>
@@ -416,25 +640,35 @@ function App() {
               <div className="right-column">
                 <div className="panel progress-panel">
                   <div className="panel-header">
-                    <div><h3>Daily Progress</h3><p>Your productivity</p></div>
+                    <div>
+                      <h3>Daily Progress</h3>
+                      <p>Your productivity</p>
+                    </div>
                     <Target size={20} />
                   </div>
                   <div className="progress-circle" style={{ "--progress": `${progress}%` }}>
                     <div><strong>{progress}%</strong><small>Completed</small></div>
                   </div>
-                  <p className="progress-caption">{completed.length} of {tasks.length} tasks completed</p>
+                  <p className="progress-caption">
+                    {completed.length} of {tasks.length} tasks completed
+                  </p>
                 </div>
 
                 <div className="ai-card">
                   <div className="ai-heading"><Sparkles size={20} /> AI Assistant</div>
                   <h3>Let AI organize your day.</h3>
                   <p>Generate an intelligent timetable based on your goals and availability.</p>
-                  <button onClick={() => setActivePage("AI Assistant")}>Generate timetable <ChevronRight size={17} /></button>
+                  <button onClick={() => setActivePage("AI Assistant")}>
+                    Generate timetable <ChevronRight size={17} />
+                  </button>
                 </div>
 
                 <div className="panel break-panel">
                   <Coffee size={20} />
-                  <div><strong>Remember to take breaks!</strong><small>Rest is part of productivity.</small></div>
+                  <div>
+                    <strong>Remember to take breaks!</strong>
+                    <small>Rest is part of productivity.</small>
+                  </div>
                 </div>
               </div>
             </section>
@@ -444,115 +678,154 @@ function App() {
         {activePage === "My Timetable" && (
           <section className="panel my-timetable-page">
 
-            <div className="panel-header">
-              <div>
-                <h3>Weekly Timetable</h3>
-                <p>View your planned activities by day</p>
-              </div>
-            </div>
-
-            <div className="week-selector">
-
-              {days.map((d) => (
-                <button
-                  key={d}
-                  className={day === d ? "selected-day" : ""}
-                  onClick={() => setDay(d)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-
-                    const taskId = Number(
-                      e.dataTransfer.getData("taskId")
-                    );
-
-                    setTasks((prev) =>
-                      prev.map((task) =>
-                        task.id === taskId
-                          ? { ...task, day: d }
-                          : task
-                      )
-                    );
-                  }}
-                >
-                  {d.slice(0, 3)}
+            <div className="calendar-container">
+              <div className="calendar-header">
+                <button onClick={() => changeMonth(-1)}>
+                  <ChevronLeft size={20} />
                 </button>
-              ))}
 
-            </div>
+                <h2>
+                  {currentMonth.toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric"
+                  })}
+                </h2>
 
-            <h3>{day}'s Schedule</h3>
+                <button onClick={() => changeMonth(1)}>
+                  <ChevronRight size={20} />
+                </button>
+              </div>
 
-            <div className="all-tasks-list">
-              {tasks
-                .filter((task) => (task.day || "Monday") === day)
-                .map((task) => (
-                  <div
-                    className="all-task-item"
-                    key={task.id}
-                    draggable={true}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("taskId", String(task.id));
-                    }}
-                  >
-                    <div>
-                      <strong>{task.title}</strong>
-                      <small>{task.subject}</small>
-                      <small>{task.time}</small>
-                      <span className="priority-badge">
-                        {task.priority || "Medium"}
-                      </span>
-                    </div>
-
-                    <button
-                      className="delete-task"
-                      onClick={() => deleteTask(task.id)}
-                    >
-                      ×
-                    </button>
+              <div className="calendar-grid">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name) => (
+                  <div className="calendar-day-name" key={name}>
+                    {name}
                   </div>
                 ))}
 
-              {tasks.filter(
-                (task) => (task.day || "Monday") === day
-              ).length === 0 && (
-                  <p className="empty-tasks">
-                    No tasks planned for {day}.
-                  </p>
-                )}
+                {calendarCells.map((date, index) => {
+                  if (date === null) {
+                    return <div key={`empty-${index}`} />;
+                  }
+
+                  const cellDate = formatDate(
+                    new Date(
+                      currentMonth.getFullYear(),
+                      currentMonth.getMonth(),
+                      date
+                    )
+                  );
+
+                  const hasTasks = tasks.some((task) => task.date === cellDate);
+
+                  return (
+                    <button
+                      key={cellDate}
+                      className={`calendar-date ${selectedDate === cellDate ? "selected" : ""}`}
+                      onClick={() => selectDate(cellDate)}
+                    >
+                      {date}
+                      {hasTasks && <span className="calendar-dot" />}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <button
-              className="add-button"
-              onClick={() => setShowAddTask(true)}
-            >
-              <Plus size={17} /> Add task
-            </button>
+            <div className="panel-header">
+              <div>
+                <h3>Daily Timetable</h3>
+                <p>Your planned activities for the selected date</p>
+              </div>
+              <button className="add-button" onClick={() => setShowAddTask(true)}>
+                <Plus size={17} /> Add task
+              </button>
+            </div>
 
+            <h3 className="selected-date-heading">
+              {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric"
+              })}
+            </h3>
+
+            <div className="timetable-table-wrapper">
+              {selectedDateTasks.length > 0 ? (
+                <table className="timetable-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Task</th>
+                      <th>Category</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {selectedDateTasks.map((task) => {
+                      const done = completed.includes(task.id);
+
+                      return (
+                        <tr key={task.id}>
+                          <td>{task.time}</td>
+                          <td>{task.title}</td>
+                          <td>{task.subject || "General"}</td>
+                          <td>
+                            <span className={`priority-badge ${(task.priority || "Medium").toLowerCase()}`}>
+                              {task.priority || "Medium"}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              className={`check-button ${done ? "checked" : ""}`}
+                              onClick={() => toggleTask(task.id)}
+                            >
+                              {done ? "Completed" : "Pending"}
+                            </button>
+                          </td>
+                          <td>
+                            <button
+                              className="delete-task"
+                              onClick={() => deleteTask(task.id)}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="empty-tasks">No tasks planned for this date.</p>
+              )}
+            </div>
           </section>
         )}
 
         {activePage === "AI Assistant" && (
           <section className="panel ai-chat-page">
-
             <div className="panel-header">
               <div>
                 <h3><Sparkles size={20} /> Smart AI Assistant</h3>
-                <p>Your personal study planning assistant</p>
+                <p>Your personal planning assistant</p>
               </div>
+              <button
+                className="add-button"
+                onClick={clearChat}
+                disabled={isChatLoading}
+              >
+                Clear Chat
+              </button>
             </div>
 
             <div className="chat-messages">
-
               {chatMessages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`chat-message ${message.role}`}
-                >
-                  <strong>
-                    {message.role === "assistant" ? "AI Assistant" : "You"}
-                  </strong>
-
+                <div key={index} className={`chat-message ${message.role}`}>
                   <div className="message-content">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {message.text}
@@ -561,9 +834,16 @@ function App() {
                 </div>
               ))}
 
+              {isChatLoading && (
+                <div className="chat-message assistant">
+                  <div className="message-content">
+                    <p>AI is thinking...</p>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="chat-suggestions">
 
+            <div className="chat-suggestions">
               <div className="timetable-generator">
                 <h3>AI Schedule Generator</h3>
                 <p>Organize your studies, work, learning goals and daily activities with AI.</p>
@@ -577,85 +857,25 @@ function App() {
                 </button>
 
                 {showTimetableForm && (
-                  <form
-                    className="timetable-form"
-
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-
-                      const prompt = `Create a ${studentDetails.duration}-day schedule.
-
-Tasks, subjects or goals: ${studentDetails.subjects}.
-
-Available hours per day: ${studentDetails.studyHours || "Choose suitable hours"}.
-
-Preferred working time: ${studentDetails.preferredTime || "No preference"}.
-
-Important deadlines or events: ${studentDetails.examDetails || "None specified"}.
-
-Create a practical schedule with days, start times, end times and breaks.`;
-
-                      try {
-                        const response = await fetch(
-                          "http://127.0.0.1:8000/generate-timetable",
-                          {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify({ message: prompt })
-                          }
-                        );
-
-                        if (!response.ok) {
-                          throw new Error("Schedule generation failed");
-                        }
-
-                        const data = await response.json();
-
-                        const newTasks = data.tasks.map((task, index) => ({
-                          id: Date.now() + index,
-                          title: task.title,
-                          subject: task.subject,
-                          time: `${task.start} - ${task.end}`,
-                          priority: task.priority,
-                          day: task.day
-                        }));
-
-                        setTasks((prev) => [...prev, ...newTasks]);
-
-                        setShowTimetableForm(false);
-                        setActivePage("My Timetable");
-
-                      } catch (error) {
-                        console.error("Schedule generation error:", error);
-                        alert("Unable to generate your schedule. Please try again.");
-                      }
-                    }}
-
-                  >
+                  <form className="timetable-form" onSubmit={generateTimetable}>
                     <label>What do you want to organize?</label>
                     <textarea
                       placeholder="Example: Java, assignments, office work, online courses, personal tasks..."
                       value={studentDetails.subjects}
-                      onChange={(e) =>
-                        setStudentDetails({
-                          ...studentDetails,
-                          subjects: e.target.value
-                        })
-                      }
+                      onChange={(e) => setStudentDetails({
+                        ...studentDetails,
+                        subjects: e.target.value
+                      })}
                       required
                     />
 
                     <label>Available hours per day</label>
                     <select
                       value={studentDetails.studyHours}
-                      onChange={(e) =>
-                        setStudentDetails({
-                          ...studentDetails,
-                          studyHours: e.target.value
-                        })
-                      }
+                      onChange={(e) => setStudentDetails({
+                        ...studentDetails,
+                        studyHours: e.target.value
+                      })}
                     >
                       <option value="">Let AI decide</option>
                       <option value="2">2 hours</option>
@@ -669,12 +889,10 @@ Create a practical schedule with days, start times, end times and breaks.`;
                     <label>Preferred working time</label>
                     <select
                       value={studentDetails.preferredTime}
-                      onChange={(e) =>
-                        setStudentDetails({
-                          ...studentDetails,
-                          preferredTime: e.target.value
-                        })
-                      }
+                      onChange={(e) => setStudentDetails({
+                        ...studentDetails,
+                        preferredTime: e.target.value
+                      })}
                     >
                       <option value="">No preference</option>
                       <option>Morning</option>
@@ -683,32 +901,37 @@ Create a practical schedule with days, start times, end times and breaks.`;
                       <option>Flexible</option>
                     </select>
 
-                    <label>Schedule duration</label>
-                    <select
-                      value={studentDetails.duration}
-                      onChange={(e) =>
-                        setStudentDetails({
-                          ...studentDetails,
-                          duration: e.target.value
-                        })
-                      }
-                    >
-                      <option value="1">1 day</option>
-                      <option value="7">7 days</option>
-                      <option value="14">14 days</option>
-                      <option value="30">30 days</option>
-                    </select>
+                    <label>Start Date *</label>
+                    <input
+                      type="date"
+                      value={studentDetails.startDate}
+                      onChange={(e) => setStudentDetails({
+                        ...studentDetails,
+                        startDate: e.target.value
+                      })}
+                      required
+                    />
+
+                    <label>End Date *</label>
+                    <input
+                      type="date"
+                      value={studentDetails.endDate}
+                      min={studentDetails.startDate}
+                      onChange={(e) => setStudentDetails({
+                        ...studentDetails,
+                        endDate: e.target.value
+                      })}
+                      required
+                    />
 
                     <label>Important deadlines or events (optional)</label>
                     <textarea
                       placeholder="Example: Project submission on Friday, exam next week..."
                       value={studentDetails.examDetails}
-                      onChange={(e) =>
-                        setStudentDetails({
-                          ...studentDetails,
-                          examDetails: e.target.value
-                        })
-                      }
+                      onChange={(e) => setStudentDetails({
+                        ...studentDetails,
+                        examDetails: e.target.value
+                      })}
                     />
 
                     <button type="submit" className="submit-task">
@@ -717,14 +940,12 @@ Create a practical schedule with days, start times, end times and breaks.`;
                   </form>
                 )}
               </div>
-
             </div>
 
             <div className="chat-suggestions">
               <button onClick={() => setChatInput("Create a 4-hour daily study plan")}>
                 Create a study plan
               </button>
-
               <button onClick={() => setChatInput("Help me prepare for my exams")}>
                 Exam preparation
               </button>
@@ -739,20 +960,17 @@ Create a practical schedule with days, start times, end times and breaks.`;
             >
               <input
                 type="text"
-                placeholder="Ask me to organize your study schedule..."
+                placeholder="Ask me to organize your tasks, schedule or goals..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
               />
-
-              <button type="submit">
-                <Sparkles size={18} /> Send
+              <button type="submit" disabled={isChatLoading}>
+                <Sparkles size={18} />
+                {isChatLoading ? "Thinking..." : "Send"}
               </button>
             </form>
 
-            <p className="chat-note">
-              Preview mode: real AI integration is coming next.
-            </p>
-
+            <p className="chat-note">AI-powered assistance is active.</p>
           </section>
         )}
 
@@ -763,10 +981,7 @@ Create a practical schedule with days, start times, end times and breaks.`;
                 <h3>All My Tasks</h3>
                 <p>Manage your activities and priorities</p>
               </div>
-              <button
-                className="add-button"
-                onClick={() => setShowAddTask(true)}
-              >
+              <button className="add-button" onClick={() => setShowAddTask(true)}>
                 <Plus size={17} /> Add Task
               </button>
             </div>
@@ -791,56 +1006,40 @@ Create a practical schedule with days, start times, end times and breaks.`;
             </select>
 
             <div className="all-tasks-list">
-              {tasks
-                .filter((task) =>
-                  task.title.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .filter((task) =>
-                  priorityFilter === "All" ||
-                  (task.priority || "Medium") === priorityFilter
-                )
-                .map((task) => {
-                  const done = completed.includes(task.id);
+              {filteredTasks.map((task) => {
+                const done = completed.includes(task.id);
 
-                  return (
-                    <div className="all-task-item" key={task.id}>
-                      <div>
-                        <strong>{task.title}</strong>
-                        <small>{task.subject}</small>
-                        <small>{task.time}</small>
-                        <span className={`priority-badge ${(task.priority || "Medium").toLowerCase()}`}>
-                          {task.priority || "Medium"}
-                        </span>
-                      </div>
-
-                      <div className="task-actions">
-                        <button
-                          type="button"
-                          onClick={() => toggleTask(task.id)}
-                        >
-                          {done ? "Undo" : "Complete"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => deleteTask(task.id)}
-                          className="delete-task"
-                        >
-                          ×
-                        </button>
-                      </div>
+                return (
+                  <div className="all-task-item" key={task.id}>
+                    <div>
+                      <strong>{task.title}</strong>
+                      <small>{task.subject}</small>
+                      <small>{task.time}</small>
+                      {task.date && <small>{task.date}</small>}
+                      <span className={`priority-badge ${(task.priority || "Medium").toLowerCase()}`}>
+                        {task.priority || "Medium"}
+                      </span>
                     </div>
-                  );
-                })}
 
-              {tasks.filter((task) =>
-                task.title.toLowerCase().includes(searchTerm.toLowerCase())
-              ).filter((task) =>
-                priorityFilter === "All" ||
-                (task.priority || "Medium") === priorityFilter
-              ).length === 0 && (
-                  <p className="empty-tasks">No matching tasks found.</p>
-                )}
+                    <div className="task-actions">
+                      <button type="button" onClick={() => toggleTask(task.id)}>
+                        {done ? "Undo" : "Complete"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTask(task.id)}
+                        className="delete-task"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredTasks.length === 0 && (
+                <p className="empty-tasks">No matching tasks found.</p>
+              )}
             </div>
           </section>
         )}
@@ -872,9 +1071,10 @@ Create a practical schedule with days, start times, end times and breaks.`;
                   type="text"
                   placeholder="e.g. Java DSA Practice"
                   value={newTask.title}
-                  onChange={(e) =>
-                    setNewTask({ ...newTask, title: e.target.value })
-                  }
+                  onChange={(e) => setNewTask({
+                    ...newTask,
+                    title: e.target.value
+                  })}
                   required
                 />
 
@@ -883,9 +1083,21 @@ Create a practical schedule with days, start times, end times and breaks.`;
                   type="text"
                   placeholder="e.g. Programming"
                   value={newTask.subject}
-                  onChange={(e) =>
-                    setNewTask({ ...newTask, subject: e.target.value })
-                  }
+                  onChange={(e) => setNewTask({
+                    ...newTask,
+                    subject: e.target.value
+                  })}
+                />
+
+                <label>Task Date *</label>
+                <input
+                  type="date"
+                  value={newTask.date || selectedDate}
+                  onChange={(e) => setNewTask({
+                    ...newTask,
+                    date: e.target.value
+                  })}
+                  required
                 />
 
                 <div className="time-inputs">
@@ -894,21 +1106,22 @@ Create a practical schedule with days, start times, end times and breaks.`;
                     <input
                       type="time"
                       value={newTask.start}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, start: e.target.value })
-                      }
+                      onChange={(e) => setNewTask({
+                        ...newTask,
+                        start: e.target.value
+                      })}
                       required
                     />
                   </div>
-
                   <div>
                     <label>End Time *</label>
                     <input
                       type="time"
                       value={newTask.end}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, end: e.target.value })
-                      }
+                      onChange={(e) => setNewTask({
+                        ...newTask,
+                        end: e.target.value
+                      })}
                       required
                     />
                   </div>
@@ -917,9 +1130,10 @@ Create a practical schedule with days, start times, end times and breaks.`;
                 <label>Priority</label>
                 <select
                   value={newTask.priority}
-                  onChange={(e) =>
-                    setNewTask({ ...newTask, priority: e.target.value })
-                  }
+                  onChange={(e) => setNewTask({
+                    ...newTask,
+                    priority: e.target.value
+                  })}
                 >
                   <option>Low</option>
                   <option>Medium</option>
@@ -934,7 +1148,6 @@ Create a practical schedule with days, start times, end times and breaks.`;
           </div>
         )}
       </main>
-
     </div>
   );
 }
