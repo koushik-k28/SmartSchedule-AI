@@ -404,7 +404,7 @@ IMPORTANT RULES:
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/generate-timetable`
+        `${import.meta.env.VITE_API_URL}/generate-timetable`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
